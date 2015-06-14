@@ -26,7 +26,7 @@ type keydir struct {
 	data map[string]item
 }
 
-func NewKeydir() *keydir {
+func newKeydir() *keydir {
 	return &keydir{
 		data: make(map[string]item),
 	}

@@ -6,7 +6,7 @@ import (
 )
 
 func Test(t *testing.T) {
-	kd := NewKeydir()
+	kd := newKeydir()
 	kd.add("fvck", 1, 1, 1, 1000)
 	kd.add("fvck1", 1, 1, 1, 1001)
 	it, _ := kd.get("fvck")
