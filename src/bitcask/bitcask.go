@@ -28,8 +28,8 @@ type Stats struct {
 
 type Options struct {
 	MaxFileSize  int32
-//	MergeWindow  [2]int // startTime-EndTime
-//	MergeTrigger float32
+	MergeWindow  [2]int // startTime-EndTime
+	MergeTrigger float32
 	Path         string
 }
 
@@ -273,3 +273,52 @@ func (b *Bitcask) scan() error {
 	return err
 }
 
+
+func (b *Bitcask) merge() {
+	for {
+		if float32(b.dead)/float32(b.total) > b.MergeTrigger {
+			h := time.Now().Hour()
+			if h <= b.MergeWindow[1] &&
+			h >= b.MergeWindow[0] {
+				b.doMerge()
+			}
+		}
+		time.Sleep(10 * time.Minute)
+	}
+}
+
+
+func (b *Bitcask) doMergeLater() {
+	time.Sleep(time.Minute)
+	b.doMerge()
+}
+
+
+func (b *Bitcask) doMerge() {
+	b.Lock()
+	fns, err := getFileNames(b.Path)
+	b.Unlock()
+	if err != nil {
+		b.doMergeLater()
+		return
+	}
+	fns = fns[:len(fns)-1]
+
+	b.isMerging = true
+	for _, fn := range fns {
+		if err := b.fillKeydir(fn); err != nil {
+			b.isMerging = false
+			if err != nil {
+				b.doMergeLater()
+				return
+			}
+		}
+		time.Sleep(10 * time.Second)
+	}
+	time.Sleep(10 * time.Minute)
+
+	for _, fn := range fns {
+		os.Remove(path.Join(b.Path, fn))
+	}
+	return
+}
