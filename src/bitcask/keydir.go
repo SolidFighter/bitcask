@@ -11,55 +11,59 @@ import (
 	"sync"
 )
 
-type item struct {
-	fileId    int32
+type Item struct {
+	fid int32
 	valueSize int32
 	valuePos int32
 	timeStamp int64
 }
 
 // keydir is a index data structure for bitcask
-// It wrap for hashmap(builtin go)
 // It is safe to call add, remove, get concurrently.
-type keydir struct {
+type KeyDir struct {
 	sync.RWMutex
-	data map[string]item
+	kv map[string]Item
 }
 
-func newKeydir() *keydir {
-	return &keydir{
-		data: make(map[string]item),
+
+func newKeyDir() *KeyDir {
+	return &KeyDir{
+		kv: make(map[string]Item),
 	}
 }
 
-func (kd *keydir) add(key string, fid int32, valueSize int32, valuePos int32, timeStamp int64) {
+
+func (kd *KeyDir) add(key string, fid int32, valueSize int32, valuePos int32, timeStamp int64) {
 	kd.Lock()
 	defer kd.Unlock()
 
-	kd.data[key] = item{fid, valueSize, valuePos, timeStamp}
+	kd.kv[key] = Item{fid, valueSize, valuePos, timeStamp}
 
 	return
 }
 
-func (kd *keydir) get(key string) (*item, bool) {
+
+func (kd *KeyDir) get(key string) (*Item, bool) {
 	kd.RLock()
 	defer kd.RUnlock()
 
-	v, b := kd.data[key]
+	v, b := kd.kv[key]
 	return &v, b
 }
 
-func (kd *keydir) delete(key string) {
+
+func (kd *KeyDir) delete(key string) {
 	kd.Lock()
 	defer kd.Unlock()
 
-	delete(kd.data, key)
+	delete(kd.kv, key)
 }
 
-func (kd *keydir) keys() chan string {
+
+func (kd *KeyDir) keys() chan string {
 	ch := make(chan string)
 	go func() {
-		for k, _ := range kd.data {
+		for k, _ := range kd.kv {
 			ch <- k
 		}
 		close(ch)

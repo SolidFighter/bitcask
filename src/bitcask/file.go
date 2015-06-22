@@ -128,7 +128,7 @@ func (f *file) writeRecord(r *record) (int32, error) {
 
 	valuePos := int32(f.offset + RECORD_HEADER_SIZE + int32(len(r.key)))
 	f.offset += int32(sz)
-	Lg.Println("write %s to %s", string(r.key), f.io.Name())
+	Lg.Printf("write %s to %s", string(r.key), f.io.Name())
 	return valuePos, nil
 }
 
