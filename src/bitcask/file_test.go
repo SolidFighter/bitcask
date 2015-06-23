@@ -3,10 +3,40 @@ package bitcask
 
 
 import (
-	"os"
+//	"os"
 	"testing"
+	"fmt"
+	"reflect"
+	"math/rand"
 )
 
+const MB = 1024 * 1024
+
+func TestRecordCompress(t *testing.T) {
+	r := Record{123, 123, 5, 21, []byte("12345"), []byte("abcabcabcabcabcabcabc")}
+	fmt.Println("crc = ", r.crc, " tstamp = ", r.tstamp, " ksz = ", r.ksz, "vsz = ", r.vsz, "key = ", r.key, " value = ", r.value)
+	r.compress()
+	fmt.Println("crc = ", r.crc, " tstamp = ", r.tstamp, " ksz = ", r.ksz, "vsz = ", r.vsz, "key = ", r.key, " value = ", r.value)
+	r.uncompress()
+	if r.crc != 123 || r.ksz != 5 || r.vsz != 21 || !reflect.DeepEqual(r.key, []byte("12345")) || !reflect.DeepEqual(r.value, []byte("abcabcabcabcabcabcabc")) {
+		t.Errorf("compress failed.")
+	}
+}
+
+
+func BenchmarkRecordCompress(b *testing.B) {
+	b.StopTimer()
+	v := genValue(MB)
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		r := Record{123, 123, int32(len([]byte("abc"))), int32(len(v)), []byte("abc"), v}
+		r.compress()
+	}
+}
+
+
+
+/*
 const testFilePath = "/tmp/1"
 
 func TestBasic(t *testing.T) {
@@ -33,4 +63,15 @@ func TestBasic(t *testing.T) {
 			t.Fatalf("Exptected %s, got %s", string(kv.value), string(r.value))
 		}
 	}
+}
+*/
+
+
+//Inner func
+func genValue(size int) []byte {
+	v := make([]byte, size)
+	for i := 0; i < size; i++ {
+		v[i] = uint8((rand.Int() % 26) + 97) // a-z
+	}
+	return v
 }

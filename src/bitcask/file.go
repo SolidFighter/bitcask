@@ -1,14 +1,14 @@
 package bitcask
 
 import (
-	"bufio"
+//	"bufio"
 	"bytes"
 	"compress/zlib"
-	"encoding/binary"
 	"fmt"
 	"hash/crc32"
 	"io"
-	"os"
+//	"os"
+	"encoding/binary"
 )
 
 const (
@@ -22,7 +22,7 @@ const (
 	|-----------------------------------------------------------------------------------------|
 */
 
-type record struct {
+type Record struct {
 	crc    uint32
 	tstamp int64
 	ksz    int32
@@ -31,7 +31,7 @@ type record struct {
 	value  []byte
 }
 
-func (r *record) compress() error {
+func (r *Record) compress() error {
 	var b bytes.Buffer
 	w := zlib.NewWriter(&b)
 	if _, err := w.Write(r.value); err != nil {
@@ -43,7 +43,8 @@ func (r *record) compress() error {
 	return nil
 }
 
-func (r *record) uncompress() error {
+
+func (r *Record) uncompress() error {
 	b := bytes.NewReader(r.value)
 	zr, err := zlib.NewReader(b)
 	if err != nil {
@@ -51,12 +52,16 @@ func (r *record) uncompress() error {
 	}
 	var buf bytes.Buffer
 	_, err = io.Copy(&buf, zr)
+	if err != nil {
+		return fmt.Errorf("Copy failed because of %s", err.Error())
+	}
 	r.value = buf.Bytes()
+	r.vsz = int32(len(buf.Bytes()))
 	zr.Close()
 	return nil
 }
 
-func (r *record) encode() ([]byte, error) {
+func (r *Record) encode() ([]byte, error) {
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.BigEndian, r.tstamp)
 	binary.Write(buf, binary.BigEndian, r.ksz)
@@ -73,6 +78,7 @@ func (r *record) encode() ([]byte, error) {
 }
 
 
+/*
 type file struct {
 	io     *os.File
 	wbuf   *bufio.Writer
@@ -188,4 +194,4 @@ func (f *file) close() error {
 	}
 	return f.io.Close()
 }
-
+*/
