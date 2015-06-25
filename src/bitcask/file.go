@@ -1,13 +1,13 @@
 package bitcask
 
 import (
-//	"bufio"
+	"bufio"
 	"bytes"
 	"compress/zlib"
 	"fmt"
 	"hash/crc32"
 	"io"
-//	"os"
+	"os"
 	"encoding/binary"
 )
 
@@ -78,8 +78,7 @@ func (r *Record) encode() ([]byte, error) {
 }
 
 
-/*
-type file struct {
+type File struct {
 	io     *os.File
 	wbuf   *bufio.Writer
 	offset int32
@@ -87,11 +86,14 @@ type file struct {
 }
 
 
-func newFile(f *os.File, id int32) *file {
-	Lg.Println("Create file" + f.Name())
+func newFile(f *os.File, id int32) *File {
+//	Lg.Println("Create file" + f.Name())
+	fmt.Println("Create file" + f.Name())
 	fi, _ := f.Stat()
 	offset := fi.Size()
-	return &file{
+//	Lg.Printf("offset is %d.", offset)
+	fmt.Printf("offset is %d.", offset)
+	return &File{
 		io:     f,
 		wbuf:   bufio.NewWriter(f),
 		offset: int32(offset),
@@ -99,8 +101,8 @@ func newFile(f *os.File, id int32) *file {
 }
 
 
-func (f *file) write(key string, value []byte, tstamp int64) (int32, error) {
-	r := &record{
+func (file *File) write(key string, value []byte, tstamp int64) (int32, error) {
+	record := &Record{
 		key:    []byte(key),
 		value:  value,
 		ksz:    int32(len(key)),
@@ -108,9 +110,8 @@ func (f *file) write(key string, value []byte, tstamp int64) (int32, error) {
 		tstamp: tstamp,
 	}
 
-	var pos int32
-	var err error
-	if pos, err = f.writeRecord(r); err != nil {
+	pos, err := file.writeRecord(record)
+	if err != nil {
 		return -1, err
 	}
 
@@ -118,80 +119,88 @@ func (f *file) write(key string, value []byte, tstamp int64) (int32, error) {
 }
 
 
-func (f *file) writeRecord(r *record) (int32, error) {
-	data, err := r.encode()
+func (file *File) read() (*Record, error) {
+	record := new(Record)
+	header := make([]byte, RECORD_HEADER_SIZE)
+
+	size, err := file.io.Read(header)
 	if err != nil {
-		return -1, err
-	}
-	sz, err := f.wbuf.Write(data)
-	if err != nil {
-		return -1, err
-	}
-	if sz < len(data) {
-		err = fmt.Errorf("writeRecord: expected %d got %d\n", len(data), sz)
-		return -1, err
-	}
-
-	valuePos := int32(f.offset + RECORD_HEADER_SIZE + int32(len(r.key)))
-	f.offset += int32(sz)
-	Lg.Printf("write %s to %s", string(r.key), f.io.Name())
-	return valuePos, nil
-}
-
-func (f *file) sync() error {
-	if err := f.wbuf.Flush(); err != nil {
-		return err
-	}
-	e := f.io.Sync()
-	return e
-}
-
-func (f *file) read() (*record, error) {
-	r := new(record)
-	headerData := make([]byte, RECORD_HEADER_SIZE)
-
-	var sz int
-	var err error
-	if sz, err = f.io.Read(headerData); err != nil {
 		return nil, err
 	}
-	if int32(sz) != RECORD_HEADER_SIZE {
-		return nil, fmt.Errorf("Read Header: exptectd %d, got %d", RECORD_HEADER_SIZE, sz)
+	if int32(size) != RECORD_HEADER_SIZE {
+		return nil, fmt.Errorf("Read Header: exptectd %d, got %d", RECORD_HEADER_SIZE, size)
 	}
-	buf := bytes.NewReader(headerData)
-	binary.Read(buf, binary.BigEndian, &r.crc)
-	binary.Read(buf, binary.BigEndian, &r.tstamp)
-	binary.Read(buf, binary.BigEndian, &r.ksz)
-	binary.Read(buf, binary.BigEndian, &r.vsz)
-	r.key = make([]byte, r.ksz)
-	r.value = make([]byte, r.vsz)
-	if _, err := f.io.Read(r.key); err != nil {
+
+	buf := bytes.NewReader(header)
+	binary.Read(buf, binary.BigEndian, &record.crc)
+	binary.Read(buf, binary.BigEndian, &record.tstamp)
+	binary.Read(buf, binary.BigEndian, &record.ksz)
+	binary.Read(buf, binary.BigEndian, &record.vsz)
+
+	record.key = make([]byte, record.ksz)
+	record.value = make([]byte, record.vsz)
+	if _, err := file.io.Read(record.key); err != nil {
 		return nil, fmt.Errorf("key: %s", err.Error())
 	}
-	if _, err := f.io.Read(r.value); err != nil {
+	if _, err := file.io.Read(record.value); err != nil {
 		return nil, fmt.Errorf("Read value: %s", err.Error())
 	}
 
 	//check crc
-	data := append(append(headerData, r.key...), r.value...)
+	data := append(append(header, record.key...), record.value...)
 	crc := crc32.ChecksumIEEE(data[4:])
-	if r.crc != crc {
-		return nil, fmt.Errorf("CRC check failed %u %u", r.crc, crc)
+	if record.crc != crc {
+		return nil, fmt.Errorf("CRC check failed %u %u", record.crc, crc)
 	}
-	return r, err
+	return record, err
 }
 
-func (f *file) name() string {
-	if f.io != nil {
-		return f.io.Name()
+
+func (file *File) writeRecord(record *Record) (int32, error) {
+	data, err := record.encode()
+	if err != nil {
+		return -1, err
+	}
+
+	size, err := file.wbuf.Write(data)
+	if err != nil {
+		return -1, err
+	}
+	if size < len(data) {
+		err = fmt.Errorf("writeRecord: expected %d got %d\n", len(data), size)
+		return -1, err
+	}
+
+	valuePos := int32(file.offset + RECORD_HEADER_SIZE + int32(len(record.key)))
+	file.offset += int32(size)
+	//Lg.Printf("write %s to %s", string(record.key), file.io.Name())
+	fmt.Printf("write %s to %s.\n", string(record.key), file.io.Name())
+
+	return valuePos, nil
+}
+
+
+func (file *File) close() error {
+	if err := file.wbuf.Flush(); err != nil {
+		return err
+	}
+	return file.io.Close()
+}
+
+
+func (file *File) sync() error {
+	if err := file.wbuf.Flush(); err != nil {
+		return err
+	}
+	err := file.io.Sync()
+	return err
+}
+
+
+func (file *File) name() string {
+	if file.io != nil {
+		return file.io.Name()
 	}
 	return ""
 }
 
-func (f *file) close() error {
-	if err := f.wbuf.Flush(); err != nil {
-		return err
-	}
-	return f.io.Close()
-}
-*/

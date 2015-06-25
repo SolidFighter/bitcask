@@ -1,13 +1,12 @@
 package bitcask
 
-
-
 import (
-//	"os"
 	"testing"
 	"fmt"
 	"reflect"
 	"math/rand"
+	"os"
+	"time"
 )
 
 const MB = 1024 * 1024
@@ -35,36 +34,46 @@ func BenchmarkRecordCompress(b *testing.B) {
 }
 
 
-
-/*
-const testFilePath = "/tmp/1"
-
-func TestBasic(t *testing.T) {
-	//defer os.Remove(testFilePath)
-	f, _ := os.OpenFile(testFilePath, os.O_CREATE|os.O_RDWR, 0666)
-	b := newFile(f, 1)
-	for _, kv := range Testdata {
-		_, err := b.write(kv.key, kv.value, 0)
-		if err != nil {
-			t.Fatalf("Error %s while writing %s", err.Error(), kv.key)
-		}
-	}
-	b.sync()
-	b.io.Seek(0, 0)
-	for _, kv := range Testdata {
-		r, err := b.read()
-		if err != nil {
-			t.Fatalf("Error %s while reading %s", err.Error(), kv.key)
-		}
-		if string(r.key) != kv.key {
-			t.Fatalf("Exptected %s, got %s", kv.key, string(r.key))
-		}
-		if string(r.value) != string(kv.value) {
-			t.Fatalf("Exptected %s, got %s", string(kv.value), string(r.value))
-		}
-	}
+func TestNewFile(t *testing.T) {
+	activefile, _ := os.OpenFile("1.data", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0766)
+	file := newFile(activefile, 1)
+	fmt.Printf("offset = %d, id = %d.\n", file.offset, file.id)
+	os.Remove("1.data")
 }
-*/
+
+
+func TestFileWriteRead(t *testing.T) {
+	activefile, _ := os.OpenFile("1.data", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0766)
+	file := newFile(activefile, 1)
+	fmt.Printf("offset = %d, id = %d.\n", file.offset, file.id)
+	file.write("key", []byte("value"), time.Now().Unix())
+	file.write("key1", []byte("value1"), time.Now().Unix())
+	file.close()
+
+	activefile, _ = os.OpenFile("1.data", os.O_RDONLY, 0766)
+	file = newFile(activefile, 1)
+	record, err := file.read()
+	if err != nil || !reflect.DeepEqual(string(record.key), "key") || !reflect.DeepEqual(string(record.value), "value") {
+		t.Errorf("read failed, record.key = %s, record.value = %s.", record.key, record.value)
+	}
+
+	record, err = file.read()
+	if err != nil || !reflect.DeepEqual(string(record.key), "key1") || !reflect.DeepEqual(string(record.value), "value1") {
+		t.Errorf("read failed, record.key = %s, record.value = %s.", record.key, record.value)
+	}
+	os.Remove("1.data")
+}
+
+
+func TestName(t *testing.T) {
+	activefile, _ := os.OpenFile("1.data", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0766)
+	file := newFile(activefile, 1)
+
+	if file.name() != "1.data" {
+		t.Errorf("Expected %s, Got %s", "1.data", file.name())
+	}
+	os.Remove("1.data")
+}
 
 
 //Inner func
