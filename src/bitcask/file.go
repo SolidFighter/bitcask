@@ -87,12 +87,10 @@ type File struct {
 
 
 func newFile(f *os.File, id int32) *File {
-//	Lg.Println("Create file" + f.Name())
-	fmt.Println("Create file" + f.Name())
+	Logger.Println("Create file" + f.Name())
 	fi, _ := f.Stat()
 	offset := fi.Size()
-//	Lg.Printf("offset is %d.", offset)
-	fmt.Printf("offset is %d.", offset)
+	Logger.Printf("offset is %d.", offset)
 	return &File{
 		io:     f,
 		wbuf:   bufio.NewWriter(f),
@@ -173,8 +171,7 @@ func (file *File) writeRecord(record *Record) (int32, error) {
 
 	valuePos := int32(file.offset + RECORD_HEADER_SIZE + int32(len(record.key)))
 	file.offset += int32(size)
-	//Lg.Printf("write %s to %s", string(record.key), file.io.Name())
-	fmt.Printf("write %s to %s.\n", string(record.key), file.io.Name())
+	Logger.Printf("write %s to %s.", string(record.key), file.io.Name())
 
 	return valuePos, nil
 }
