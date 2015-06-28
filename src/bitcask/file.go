@@ -61,6 +61,7 @@ func (r *Record) uncompress() error {
 	return nil
 }
 
+
 func (r *Record) encode() ([]byte, error) {
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.BigEndian, r.tstamp)

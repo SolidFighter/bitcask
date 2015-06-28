@@ -4,9 +4,9 @@ import (
 	"os"
 	"sync"
 	"log"
-	//"errors"
+	"errors"
 	"fmt"
-	//"time"
+	"time"
 	"path"
 	"sort"
 	"io"
@@ -126,6 +126,7 @@ func (b *Bitcask) fillKeyDir(fn string) error {
 	fmt.Sscanf(fn, DATA_FILE, &fid)
 	file := newFile(f, fid)
 
+	var offset int32 = 0
 	for {
 		record, err := file.read()
 		if err != nil {
@@ -134,6 +135,7 @@ func (b *Bitcask) fillKeyDir(fn string) error {
 			}
 			break
 		}
+		offset += RECORD_HEADER_SIZE + record.ksz + record.vsz
 
 		key := string(record.key)
 		if b.isMerging {
@@ -155,10 +157,11 @@ func (b *Bitcask) fillKeyDir(fn string) error {
 		} else {
 			// deleted key
 			if record.vsz == 1 && record.value[0] == 0 {
+				b.kd.delete(string(record.key))
 				b.deadKeys++
 			} else {
 				b.totalKeys++
-				b.kd.add(key, fid, record.vsz, RECORD_HEADER_SIZE + record.ksz, record.tstamp)
+				b.kd.add(key, fid, record.vsz, offset - record.vsz, record.tstamp)
 				if b.Has(key) {
 					b.deadKeys++
 				}
@@ -188,7 +191,6 @@ func (b *Bitcask) Sync() error {
 }
 
 
-/*
 func (b *Bitcask) Set(key string, value []byte) error {
 	b.Lock()
 	defer b.Unlock()
@@ -197,13 +199,61 @@ func (b *Bitcask) Set(key string, value []byte) error {
 }
 
 
+func (b *Bitcask) set(key string, value []byte, tstamp int64) error {
+	if len(key) == 0 {
+		return fmt.Errorf("Key can not be None")
+	}
+
+	if RECORD_HEADER_SIZE+int32(len(key)+len(value))+b.file.offset > b.MaxFileSize {
+		if err := b.file.close(); err != nil {
+			return fmt.Errorf("Close %s failed: %s", b.file.io.Name(), err.Error())
+		}
+		nextFid := b.file.id + 1
+		nextFileName := path.Join(b.Path, fmt.Sprintf(DATA_FILE, nextFid))
+		nextFp, err := os.OpenFile(nextFileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, defaultDirPerm)
+		if err != nil {
+			return fmt.Errorf("Create %s failed :%s", nextFp.Name(), err.Error())
+		}
+		b.file= newFile(nextFp, nextFid)
+	}
+	vpos, err := b.file.write(key, value, tstamp)
+	if err != nil {
+		return err
+	}
+
+	if b.Has(key) {
+		b.deadKeys++
+	}
+	b.kd.add(key, b.file.id, int32(len(value)), vpos, tstamp)
+	b.totalKeys++
+
+	return nil
+}
+
+
 func (b *Bitcask) Get(key string) ([]byte, error) {
 	item, ok := b.kd.get(key)
 	if !ok {
-		return nil, ErrKeyNotFound
+		return nil, errors.New("Key not found")
 	}
 	value, err := b.getValue(item)
 	return value, err
+}
+
+
+func (b *Bitcask) getValue(item *Item) ([]byte, error) {
+	fp, err := os.Open(path.Join(b.Path, fmt.Sprintf(DATA_FILE, item.fid)))
+	if err != nil {
+		return nil, fmt.Errorf("getValue %s", err.Error())
+	}
+	defer fp.Close()
+	value := make([]byte, item.valueSize)
+	realSize, err := fp.ReadAt(value, int64(item.valuePos))
+	if int32(realSize) != item.valueSize {
+		return nil, fmt.Errorf("Expected %d bytes but got %d", item.valueSize, realSize)
+	}
+
+	return value, nil
 }
 
 
@@ -218,66 +268,14 @@ func (b *Bitcask) Del(key string) error {
 	return err
 }
 
+
 func (b *Bitcask) Keys() chan string {
 	return b.kd.keys()
 }
 
 
-func (b *Bitcask) Has(key string) bool {
-	_, ok := b.kd.get(key)
-	return ok
-}
 
-
-func (b *Bitcask) set(key string, value []byte, tstamp int64) error {
-	if len(key) == 0 {
-		return fmt.Errorf("Key can not be None")
-	}
-
-	if RECORD_HEADER_SIZE+int32(len(key)+len(value))+b.curr.offset > b.MaxFileSize {
-		if err := b.curr.close(); err != nil {
-			return fmt.Errorf("Close %s failed: %s", b.curr.io.Name(), err.Error())
-		}
-		nextFid := b.curr.id + 1
-		nextPath := path.Join(b.Path, fmt.Sprintf(DATA_FILE, nextFid))
-		nextFp, err := os.OpenFile(nextPath, os.O_CREATE|os.O_APPEND|os.O_RDWR, defaultDirPerm)
-		if err != nil {
-			return fmt.Errorf("Create %s failed :%s", nextFp.Name(), err.Error())
-		}
-		b.curr = newFile(nextFp, nextFid)
-	}
-	vpos, err := b.curr.write(key, value, tstamp)
-	if err != nil {
-		return err
-	}
-
-	if b.Has(key) {
-		b.dead++
-	}
-	b.kd.add(key, b.curr.id, int32(len(value)), vpos, tstamp)
-	b.total++
-
-	return nil
-}
-
-
-func (b *Bitcask) getValue(it *item) ([]byte, error) {
-	fp, err := os.Open(path.Join(b.Path, fmt.Sprintf(DATA_FILE, it.fileId)))
-	if err != nil {
-		return nil, fmt.Errorf("getValue %s", err.Error())
-	}
-	defer fp.Close()
-	value := make([]byte, it.valueSize)
-	realSize, err := fp.ReadAt(value, int64(it.valuePos))
-	if int32(realSize) != it.valueSize {
-		return nil, fmt.Errorf("Expected %d bytes got %d", it.valueSize, realSize)
-	}
-	return value, nil
-}
-
-
-
-
+/*
 func (b *Bitcask) merge() {
 	for {
 		if float32(b.dead)/float32(b.total) > b.MergeTrigger {

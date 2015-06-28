@@ -1,10 +1,10 @@
 package bitcask
 
-
 import (
 	//"math/rand"
 	"os"
 	"testing"
+	"fmt"
 )
 
 const (
@@ -15,7 +15,7 @@ const (
 )
 
 var options Options = Options{
-	MaxFileSize:  1024 * 1024,
+	MaxFileSize:  60,
 	//MergeWindow:  [2]int{0, 23},
 	MergeTrigger: 0.6,
 	Path:         testDirPath,
@@ -34,37 +34,40 @@ func TestNewBitcask(t *testing.T) {
 	}
 }
 
-
-/*
 type TestKeyValue struct {
 	key      string
 	value    []byte
-	ksz, vsz int32
 }
 
 var Testdata = []TestKeyValue{
-	TestKeyValue{"key1", []byte("value1"), 4, 6},
-	TestKeyValue{"key2", []byte("value3"), 4, 6},
+	TestKeyValue{"key1", []byte("value1")},
+	TestKeyValue{"key2", []byte("value2")},
+	TestKeyValue{"key3", []byte("value3")},
+	TestKeyValue{"key4", []byte("value4")},
 }
 
-func genValue(size int) []byte {
-	v := make([]byte, size)
-	for i := 0; i < size; i++ {
-		v[i] = uint8((rand.Int() % 26) + 97) // a-z
-	}
-	return v
-}
 
-func TestBC(t *testing.T) {
-	b, _ := NewBitcask(O)
-	//	defer os.RemoveAll(b.path)
+func TestBcOpe(t *testing.T) {
+	b, _ := NewBitcask(options)
+	//defer os.RemoveAll(b.Path)
 	for _, kv := range Testdata {
 		err := b.Set(kv.key, kv.value)
 		if err != nil {
-			t.Fatalf("Error %s while Seting %s", err.Error(), kv.key)
+			t.Fatalf("Error %s while Seting %s.", err.Error(), kv.key)
 		}
 	}
-	b.Sync()
+
+	for k, v := range b.kd.kv {
+		fmt.Printf("key = %s, fid = %d, timeStamp = %d, valueSize = %d, valuePos = %d.\n", k, v.fid, v.timeStamp, v.valueSize, v.valuePos)
+	}
+
+	b.Close()
+
+	b, _ = NewBitcask(options)
+	for k, v := range b.kd.kv {
+		fmt.Printf("key = %s, fid = %d, timeStamp = %d, valueSize = %d, valuePos = %d.\n", k, v.fid, v.timeStamp, v.valueSize, v.valuePos)
+	}
+
 	for _, kv := range Testdata {
 		v, err := b.Get(kv.key)
 		if err != nil {
@@ -74,21 +77,28 @@ func TestBC(t *testing.T) {
 			t.Fatalf("Exptected %s, got %s", string(kv.value), string(v))
 		}
 	}
+
+	keys := b.Keys()
+	for key := range keys {
+		fmt.Printf("key = %s.\n", key)
+	}
+
+	b.Del(Testdata[0].key)
+	b.Close()
+	b, _ = NewBitcask(options)
+	for k, v := range b.kd.kv {
+		fmt.Printf("key = %s, fid = %d, timeStamp = %d, valueSize = %d, valuePos = %d.\n", k, v.fid, v.timeStamp, v.valueSize, v.valuePos)
+	}
 }
 
-func TestKeys(t *testing.T) {
-	b, _ := NewBitcask(O)
-	//	defer os.RemoveAll(b.path)
-	for _, kv := range Testdata {
-		err := b.Set(kv.key, kv.value)
-		if err != nil {
-			t.Fatalf("Error %s while Seting %s", err.Error(), kv.key)
-		}
+
+/*
+func genValue(size int) []byte {
+	v := make([]byte, size)
+	for i := 0; i < size; i++ {
+		v[i] = uint8((rand.Int() % 26) + 97) // a-z
 	}
-	b.Sync()
-	for key := range b.Keys() {
-		println(key)
-	}
+	return v
 }
 
 func BenchmarkSet1K(t *testing.B) {
