@@ -1,15 +1,28 @@
-value : 100 Bytes
+1.Write bench
+valueSize : 100 Bytes
 async : 69939.851 ops/sec
 sync  : 18.854 ops/sec
 
-value : 1K
+valueSize : 1K
 async : 27606.007 ops/sec
 sync  : 20.852 ops/sec
 
-value : 1M
+valueSize : 1M
 async : 45.425 ops/sec
 sync  : 11.086 ops/sec
 
-value : 10M
+valueSize : 10M
 async : 4.911 ops/sec
 sync  : 3.195 ops/sec
+
+2.Read bench
+valueSize : 100 Bytes
+161759.948 ops/sec
+
+valueSize : 1K
+73.985 ops/sec
+
+valueSize : 1M
+7.564 ops/sec
+
+

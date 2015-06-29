@@ -1,7 +1,6 @@
 package bitcask
 
 import (
-	//"math/rand"
 	"os"
 	"testing"
 	"fmt"
@@ -127,25 +126,46 @@ func benchSet(t *testing.B, size int) {
 	b.Close()
 }
 
-/*
+
+func BenchmarkGet100B(t *testing.B) {
+	benchGet(t, 100)
+}
 
 
 func BenchmarkGet1K(t *testing.B) {
 	benchGet(t, K)
 }
 
+
 func BenchmarkGet1M(t *testing.B) {
 	benchGet(t, M)
 }
 
+
+func BenchmarkGet10M(t *testing.B) {
+	benchGet(t, 10 * M)
+}
+
+
 func benchGet(t *testing.B, size int) {
-	b, _ := NewBitcask(O)
+	t.StopTimer()
+	//insert value before get
+	os.RemoveAll(testDirPath)
+	b, _ := NewBitcask(options)
+	value := genValue(size)
+	for i := 0; i < t.N; i++ {
+		b.Set(string(i), value)
+	}
+	b.Close()
+
+	b, _ = NewBitcask(options)
 	t.SetBytes(int64(size))
 	t.StartTimer()
 	for i := 0; i < t.N; i++ {
-		b.Get(string(i))
+		_, err := b.Get(string(i))
+		if err != nil {
+			t.Fatalf("%s.", err.Error())
+		}
 	}
-	t.StopTimer()
 	b.Close()
 }
-*/
