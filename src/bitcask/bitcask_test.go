@@ -15,7 +15,7 @@ const (
 )
 
 var options Options = Options{
-	MaxFileSize:  60,
+	MaxFileSize:  int32(G),
 	//MergeWindow:  [2]int{0, 23},
 	MergeTrigger: 0.6,
 	Path:         testDirPath,
@@ -49,7 +49,7 @@ var Testdata = []TestKeyValue{
 
 func TestBcOpe(t *testing.T) {
 	b, _ := NewBitcask(options)
-	//defer os.RemoveAll(b.Path)
+	defer os.RemoveAll(b.Path)
 	for _, kv := range Testdata {
 		err := b.Set(kv.key, kv.value)
 		if err != nil {
@@ -92,22 +92,43 @@ func TestBcOpe(t *testing.T) {
 }
 
 
-/*
-func genValue(size int) []byte {
-	v := make([]byte, size)
-	for i := 0; i < size; i++ {
-		v[i] = uint8((rand.Int() % 26) + 97) // a-z
-	}
-	return v
+func BenchmarkSet100B(t *testing.B) {
+	benchSet(t, 100)
 }
+
 
 func BenchmarkSet1K(t *testing.B) {
 	benchSet(t, K)
 }
 
+
 func BenchmarkSet1M(t *testing.B) {
-	benchSet(t, K)
+	benchSet(t, M)
 }
+
+
+func BenchmarkSet10M(t *testing.B) {
+	benchSet(t, 10 * M)
+}
+
+
+func benchSet(t *testing.B, size int) {
+	t.StopTimer()
+	os.RemoveAll(testDirPath)
+	b, _ := NewBitcask(options)
+	value := genValue(size)
+	t.SetBytes(int64(size))
+
+	t.StartTimer()
+	for i := 0; i < t.N; i++ {
+		b.Set(string(i), value)
+		//b.Sync()
+	}
+	b.Close()
+}
+
+/*
+
 
 func BenchmarkGet1K(t *testing.B) {
 	benchGet(t, K)
@@ -115,20 +136,6 @@ func BenchmarkGet1K(t *testing.B) {
 
 func BenchmarkGet1M(t *testing.B) {
 	benchGet(t, M)
-}
-
-func benchSet(t *testing.B, size int) {
-	//os.RemoveAll(testDirPath)
-	b, _ := NewBitcask(O)
-	value := genValue(size)
-	t.SetBytes(int64(size))
-
-	t.StartTimer()
-	for i := 0; i < t.N; i++ {
-		b.Set(string(i), value)
-	}
-	t.StopTimer()
-	b.Close()
 }
 
 func benchGet(t *testing.B, size int) {
