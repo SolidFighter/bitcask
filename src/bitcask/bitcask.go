@@ -10,6 +10,8 @@ import (
 	"path"
 	"sort"
 	"io"
+	"bytes"
+	"compress/zlib"
 )
 
 const (
@@ -31,6 +33,7 @@ type Options struct {
 	//MergeWindow  [2]int // startTime-EndTime
 	MergeTrigger float32
 	Path         string
+	IsCompress   bool
 }
 
 
@@ -194,7 +197,15 @@ func (b *Bitcask) Sync() error {
 func (b *Bitcask) Set(key string, value []byte) error {
 	b.Lock()
 	defer b.Unlock()
-	err := b.set(key, value, time.Now().Unix())
+
+	var err error
+	if b.IsCompress {
+		value, err = compress(value)
+		if err != nil {
+			return fmt.Errorf("compress failed.")
+		}
+	}
+	err = b.set(key, value, time.Now().Unix())
 	return err
 }
 
@@ -236,15 +247,22 @@ func (b *Bitcask) Get(key string) ([]byte, error) {
 	if !ok {
 		return nil, errors.New("Key not found")
 	}
-	value, err := b.getValue(item)
+	value, err := b.get(item)
+
+	if b.IsCompress {
+		value, err = uncompress(value)
+		if err != nil {
+			return nil, fmt.Errorf("uncompress failed.")
+		}
+	}
 	return value, err
 }
 
 
-func (b *Bitcask) getValue(item *Item) ([]byte, error) {
+func (b *Bitcask) get(item *Item) ([]byte, error) {
 	fp, err := os.Open(path.Join(b.Path, fmt.Sprintf(DATA_FILE, item.fid)))
 	if err != nil {
-		return nil, fmt.Errorf("getValue %s", err.Error())
+		return nil, fmt.Errorf("get %s", err.Error())
 	}
 	defer fp.Close()
 	value := make([]byte, item.valueSize)
@@ -273,6 +291,34 @@ func (b *Bitcask) Keys() chan string {
 	return b.kd.keys()
 }
 
+
+func compress(value []byte) ([]byte, error) {
+	var b bytes.Buffer
+	w := zlib.NewWriter(&b)
+	if _, err := w.Write(value); err != nil {
+		return nil, fmt.Errorf("compress value : %s", err.Error())
+	}
+	w.Close()
+	value = []byte(b.Bytes())
+	return value, nil
+}
+
+
+func uncompress(value []byte) ([]byte, error) {
+	b := bytes.NewReader(value)
+	zr, err := zlib.NewReader(b)
+	if err != nil {
+		return nil, fmt.Errorf("uncompress value %s", err.Error())
+	}
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, zr)
+	if err != nil {
+		return nil, fmt.Errorf("Copy failed because of %s", err.Error())
+	}
+	value = buf.Bytes()
+	zr.Close()
+	return value, nil
+}
 
 
 /*

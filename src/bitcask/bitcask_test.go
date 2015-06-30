@@ -18,6 +18,7 @@ var options Options = Options{
 	//MergeWindow:  [2]int{0, 23},
 	MergeTrigger: 0.6,
 	Path:         testDirPath,
+	IsCompress: true,
 }
 
 
@@ -169,3 +170,28 @@ func benchGet(t *testing.B, size int) {
 	}
 	b.Close()
 }
+
+
+func TestCompress(t *testing.T) {
+	var value []byte
+	value = genValue(K)
+	fmt.Printf("value = %s, len = %d.\n", string(value), len(value))
+	valuecom, _ := compress(value)
+	fmt.Printf("valuecom = %s, len = %d.\n", string(valuecom), len(valuecom))
+	value1, _ := uncompress(valuecom)
+	fmt.Printf("value1 = %s, len = %d.\n", string(value1), len(value1))
+	if string(value) != string(value1) {
+		t.Errorf("uncompress failed.")
+	}
+}
+
+
+func BenchmarkCompress(b *testing.B) {
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		var value []byte
+		value = genValue(MB)
+		compress(value)
+	}
+}
+

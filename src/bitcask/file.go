@@ -3,10 +3,8 @@ package bitcask
 import (
 	"bufio"
 	"bytes"
-	"compress/zlib"
 	"fmt"
 	"hash/crc32"
-	"io"
 	"os"
 	"encoding/binary"
 )
@@ -29,36 +27,6 @@ type Record struct {
 	vsz    int32
 	key    []byte
 	value  []byte
-}
-
-func (r *Record) compress() error {
-	var b bytes.Buffer
-	w := zlib.NewWriter(&b)
-	if _, err := w.Write(r.value); err != nil {
-		return fmt.Errorf("compress value : %s", err.Error())
-	}
-	w.Close()
-	r.value = []byte(b.Bytes())
-	r.vsz = int32(len(r.value))
-	return nil
-}
-
-
-func (r *Record) uncompress() error {
-	b := bytes.NewReader(r.value)
-	zr, err := zlib.NewReader(b)
-	if err != nil {
-		return fmt.Errorf("uncompress value %s", err.Error())
-	}
-	var buf bytes.Buffer
-	_, err = io.Copy(&buf, zr)
-	if err != nil {
-		return fmt.Errorf("Copy failed because of %s", err.Error())
-	}
-	r.value = buf.Bytes()
-	r.vsz = int32(len(buf.Bytes()))
-	zr.Close()
-	return nil
 }
 
 
@@ -122,12 +90,27 @@ func (file *File) read() (*Record, error) {
 	record := new(Record)
 	header := make([]byte, RECORD_HEADER_SIZE)
 
-	size, err := file.io.Read(header)
-	if err != nil {
+	if err := file.readRecord(record, header); err != nil {
 		return nil, err
 	}
+
+	//check crc
+	data := append(append(header, record.key...), record.value...)
+	crc := crc32.ChecksumIEEE(data[4:])
+	if record.crc != crc {
+		return nil, fmt.Errorf("CRC check failed %u %u", record.crc, crc)
+	}
+	return record, nil
+}
+
+
+func (file *File) readRecord(record *Record, header []byte) error {
+	size, err := file.io.Read(header)
+	if err != nil {
+		return err
+	}
 	if int32(size) != RECORD_HEADER_SIZE {
-		return nil, fmt.Errorf("Read Header: exptectd %d, got %d", RECORD_HEADER_SIZE, size)
+		return fmt.Errorf("Read Header: exptectd %d, got %d", RECORD_HEADER_SIZE, size)
 	}
 
 	buf := bytes.NewReader(header)
@@ -139,19 +122,13 @@ func (file *File) read() (*Record, error) {
 	record.key = make([]byte, record.ksz)
 	record.value = make([]byte, record.vsz)
 	if _, err := file.io.Read(record.key); err != nil {
-		return nil, fmt.Errorf("key: %s", err.Error())
+		return fmt.Errorf("key: %s", err.Error())
 	}
 	if _, err := file.io.Read(record.value); err != nil {
-		return nil, fmt.Errorf("Read value: %s", err.Error())
+		return fmt.Errorf("Read value: %s", err.Error())
 	}
 
-	//check crc
-	data := append(append(header, record.key...), record.value...)
-	crc := crc32.ChecksumIEEE(data[4:])
-	if record.crc != crc {
-		return nil, fmt.Errorf("CRC check failed %u %u", record.crc, crc)
-	}
-	return record, err
+	return nil
 }
 
 
