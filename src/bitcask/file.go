@@ -30,13 +30,13 @@ type Record struct {
 }
 
 
-func (r *Record) encode() ([]byte, error) {
+func (record *Record) encode() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	binary.Write(buf, binary.BigEndian, r.tstamp)
-	binary.Write(buf, binary.BigEndian, r.ksz)
-	binary.Write(buf, binary.BigEndian, r.vsz)
-	buf.Write(r.key)
-	buf.Write(r.value)
+	binary.Write(buf, binary.BigEndian, record.tstamp)
+	binary.Write(buf, binary.BigEndian, record.ksz)
+	binary.Write(buf, binary.BigEndian, record.vsz)
+	buf.Write(record.key)
+	buf.Write(record.value)
 	crc := crc32.ChecksumIEEE(buf.Bytes())
 
 	buf2 := new(bytes.Buffer)
@@ -45,6 +45,27 @@ func (r *Record) encode() ([]byte, error) {
 
 	return buf2.Bytes(), nil
 }
+
+
+func (record *Record) decode(header []byte, file *File) error {
+	buf := bytes.NewReader(header)
+	binary.Read(buf, binary.BigEndian, &record.crc)
+	binary.Read(buf, binary.BigEndian, &record.tstamp)
+	binary.Read(buf, binary.BigEndian, &record.ksz)
+	binary.Read(buf, binary.BigEndian, &record.vsz)
+
+	record.key = make([]byte, record.ksz)
+	record.value = make([]byte, record.vsz)
+	if _, err := file.io.Read(record.key); err != nil {
+		return fmt.Errorf("key: %s", err.Error())
+	}
+	if _, err := file.io.Read(record.value); err != nil {
+		return fmt.Errorf("Read value: %s", err.Error())
+	}
+
+	return nil
+}
+
 
 
 type File struct {
@@ -88,23 +109,16 @@ func (file *File) write(key string, value []byte, tstamp int64) (int32, error) {
 
 func (file *File) read() (*Record, error) {
 	record := new(Record)
-	header := make([]byte, RECORD_HEADER_SIZE)
-
-	if err := file.readRecord(record, header); err != nil {
+	if err := file.readRecord(record); err != nil {
 		return nil, err
 	}
 
-	//check crc
-	data := append(append(header, record.key...), record.value...)
-	crc := crc32.ChecksumIEEE(data[4:])
-	if record.crc != crc {
-		return nil, fmt.Errorf("CRC check failed %u %u", record.crc, crc)
-	}
 	return record, nil
 }
 
 
-func (file *File) readRecord(record *Record, header []byte) error {
+func (file *File) readRecord(record *Record) error {
+	header := make([]byte, RECORD_HEADER_SIZE)
 	size, err := file.io.Read(header)
 	if err != nil {
 		return err
@@ -113,19 +127,15 @@ func (file *File) readRecord(record *Record, header []byte) error {
 		return fmt.Errorf("Read Header: exptectd %d, got %d", RECORD_HEADER_SIZE, size)
 	}
 
-	buf := bytes.NewReader(header)
-	binary.Read(buf, binary.BigEndian, &record.crc)
-	binary.Read(buf, binary.BigEndian, &record.tstamp)
-	binary.Read(buf, binary.BigEndian, &record.ksz)
-	binary.Read(buf, binary.BigEndian, &record.vsz)
-
-	record.key = make([]byte, record.ksz)
-	record.value = make([]byte, record.vsz)
-	if _, err := file.io.Read(record.key); err != nil {
-		return fmt.Errorf("key: %s", err.Error())
+	if err = record.decode(header, file); err != nil {
+		return fmt.Errorf("Decode failed.")
 	}
-	if _, err := file.io.Read(record.value); err != nil {
-		return fmt.Errorf("Read value: %s", err.Error())
+
+	//check crc
+	data := append(append(header, record.key...), record.value...)
+	crc := crc32.ChecksumIEEE(data[4:])
+	if record.crc != crc {
+		return fmt.Errorf("CRC check failed %u %u", record.crc, crc)
 	}
 
 	return nil
