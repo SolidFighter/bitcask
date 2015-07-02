@@ -12,9 +12,9 @@ import (
 )
 
 type Item struct {
-	fid int32
+	fid       int32
 	valueSize int32
-	valuePos int32
+	valuePos  int32
 	timeStamp int64
 }
 
@@ -25,13 +25,11 @@ type KeyDir struct {
 	kv map[string]Item
 }
 
-
 func newKeyDir() *KeyDir {
 	return &KeyDir{
 		kv: make(map[string]Item),
 	}
 }
-
 
 func (kd *KeyDir) add(key string, fid int32, valueSize int32, valuePos int32, timeStamp int64) {
 	kd.Lock()
@@ -42,7 +40,6 @@ func (kd *KeyDir) add(key string, fid int32, valueSize int32, valuePos int32, ti
 	return
 }
 
-
 func (kd *KeyDir) get(key string) (*Item, bool) {
 	kd.RLock()
 	defer kd.RUnlock()
@@ -51,14 +48,12 @@ func (kd *KeyDir) get(key string) (*Item, bool) {
 	return &v, b
 }
 
-
 func (kd *KeyDir) delete(key string) {
 	kd.Lock()
 	defer kd.Unlock()
 
 	delete(kd.kv, key)
 }
-
 
 func (kd *KeyDir) keys() chan string {
 	ch := make(chan string)
@@ -70,4 +65,3 @@ func (kd *KeyDir) keys() chan string {
 	}()
 	return ch
 }
-

@@ -1,16 +1,15 @@
 package bitcask
 
 import (
-	"testing"
 	"fmt"
-	"reflect"
 	"math/rand"
 	"os"
+	"reflect"
+	"testing"
 	"time"
 )
 
 const MB = 1024 * 1024
-
 
 func TestNewFile(t *testing.T) {
 	activefile, _ := os.OpenFile("1.data", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0766)
@@ -18,7 +17,6 @@ func TestNewFile(t *testing.T) {
 	fmt.Printf("offset = %d, id = %d.\n", file.offset, file.id)
 	os.Remove("1.data")
 }
-
 
 func TestFileWriteRead(t *testing.T) {
 	activefile, _ := os.OpenFile("1.data", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0766)
@@ -42,7 +40,6 @@ func TestFileWriteRead(t *testing.T) {
 	os.Remove("1.data")
 }
 
-
 func TestName(t *testing.T) {
 	activefile, _ := os.OpenFile("1.data", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0766)
 	file := newFile(activefile, 1)
@@ -52,7 +49,6 @@ func TestName(t *testing.T) {
 	}
 	os.Remove("1.data")
 }
-
 
 //Inner func
 func genValue(size int) []byte {

@@ -3,10 +3,10 @@ package bitcask
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"hash/crc32"
 	"os"
-	"encoding/binary"
 )
 
 const (
@@ -29,7 +29,6 @@ type Record struct {
 	value  []byte
 }
 
-
 func (record *Record) encode() ([]byte, error) {
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.BigEndian, record.tstamp)
@@ -45,7 +44,6 @@ func (record *Record) encode() ([]byte, error) {
 
 	return buf2.Bytes(), nil
 }
-
 
 func (record *Record) decode(header []byte, file *File) error {
 	buf := bytes.NewReader(header)
@@ -66,15 +64,12 @@ func (record *Record) decode(header []byte, file *File) error {
 	return nil
 }
 
-
-
 type File struct {
 	io     *os.File
 	wbuf   *bufio.Writer
 	offset int32
 	id     int32
 }
-
 
 func newFile(f *os.File, id int32) *File {
 	Logger.Println("Create file" + f.Name())
@@ -87,7 +82,6 @@ func newFile(f *os.File, id int32) *File {
 		offset: int32(offset),
 		id:     id}
 }
-
 
 func (file *File) write(key string, value []byte, tstamp int64) (int32, error) {
 	record := &Record{
@@ -106,7 +100,6 @@ func (file *File) write(key string, value []byte, tstamp int64) (int32, error) {
 	return pos, nil
 }
 
-
 func (file *File) read() (*Record, error) {
 	record := new(Record)
 	if err := file.readRecord(record); err != nil {
@@ -115,7 +108,6 @@ func (file *File) read() (*Record, error) {
 
 	return record, nil
 }
-
 
 func (file *File) readRecord(record *Record) error {
 	header := make([]byte, RECORD_HEADER_SIZE)
@@ -141,7 +133,6 @@ func (file *File) readRecord(record *Record) error {
 	return nil
 }
 
-
 func (file *File) writeRecord(record *Record) (int32, error) {
 	data, err := record.encode()
 	if err != nil {
@@ -164,14 +155,12 @@ func (file *File) writeRecord(record *Record) (int32, error) {
 	return valuePos, nil
 }
 
-
 func (file *File) close() error {
 	if err := file.wbuf.Flush(); err != nil {
 		return err
 	}
 	return file.io.Close()
 }
-
 
 func (file *File) sync() error {
 	if err := file.wbuf.Flush(); err != nil {
@@ -181,11 +170,9 @@ func (file *File) sync() error {
 	return err
 }
 
-
 func (file *File) name() string {
 	if file.io != nil {
 		return file.io.Name()
 	}
 	return ""
 }
-

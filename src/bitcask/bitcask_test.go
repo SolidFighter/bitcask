@@ -1,9 +1,10 @@
 package bitcask
 
 import (
+	"fmt"
 	"os"
 	"testing"
-	"fmt"
+	"time"
 )
 
 const (
@@ -14,13 +15,14 @@ const (
 )
 
 var options Options = Options{
-	MaxFileSize:  int32(G),
-	//MergeWindow:  [2]int{0, 23},
+	//MaxFileSize: int32(G),
+	MaxFileSize: 70,
+	StartTime: 0,
+	EndTime: 23,
 	MergeTrigger: 0.6,
 	Path:         testDirPath,
-	IsCompress: true,
+	IsCompress:   false,
 }
-
 
 func TestNewBitcask(t *testing.T) {
 	b, err := NewBitcask(options)
@@ -35,8 +37,8 @@ func TestNewBitcask(t *testing.T) {
 }
 
 type TestKeyValue struct {
-	key      string
-	value    []byte
+	key   string
+	value []byte
 }
 
 var Testdata = []TestKeyValue{
@@ -44,9 +46,15 @@ var Testdata = []TestKeyValue{
 	TestKeyValue{"key2", []byte("value2")},
 	TestKeyValue{"key3", []byte("value3")},
 	TestKeyValue{"key4", []byte("value4")},
+	TestKeyValue{"key5", []byte("value5")},
+	TestKeyValue{"key6", []byte("value6")},
+	TestKeyValue{"key7", []byte("value7")},
+	TestKeyValue{"key8", []byte("value8")},
+	TestKeyValue{"key9", []byte("value9")},
+	TestKeyValue{"key10", []byte("value10")},
 }
 
-
+/*
 func TestBcOpe(t *testing.T) {
 	b, _ := NewBitcask(options)
 	defer os.RemoveAll(b.Path)
@@ -90,27 +98,60 @@ func TestBcOpe(t *testing.T) {
 		fmt.Printf("key = %s, fid = %d, timeStamp = %d, valueSize = %d, valuePos = %d.\n", k, v.fid, v.timeStamp, v.valueSize, v.valuePos)
 	}
 }
+*/
 
+
+func TestMerge(t *testing.T) {
+	fmt.Println("in TestMerge.")
+	b, _ := NewBitcask(options)
+	for _, kv := range Testdata {
+		err := b.Set(kv.key, kv.value)
+		if err != nil {
+			t.Fatalf("Error %s while Seting %s.", err.Error(), kv.key)
+		}
+	}
+
+	for i := 0; i < 8; i++ {
+		b.Del(Testdata[i].key)
+	}
+
+	fmt.Printf("totalKeys = %d, deadKeys = %d.\n", b.totalKeys, b.deadKeys)
+
+	//time.Sleep(30 * time.Second)
+
+	/*
+	for i := 0; i < K; i++ {
+		b.Set(string(i), []byte(i))
+	}
+	*/
+
+	time.Sleep(2 * time.Minute)
+
+	keys := b.Keys()
+	for key := range keys {
+		value, _ := b.Get(key)
+		fmt.Printf("key = %s, value = %s.\n", key, string(value))
+	}
+
+	fmt.Printf("totalKeys = %d, deadKeys = %d.\n", b.totalKeys, b.deadKeys)
+	b.Close()
+}
 
 func BenchmarkSet100B(t *testing.B) {
 	benchSet(t, 100)
 }
 
-
 func BenchmarkSet1K(t *testing.B) {
 	benchSet(t, K)
 }
-
 
 func BenchmarkSet1M(t *testing.B) {
 	benchSet(t, M)
 }
 
-
 func BenchmarkSet10M(t *testing.B) {
-	benchSet(t, 10 * M)
+	benchSet(t, 10*M)
 }
-
 
 func benchSet(t *testing.B, size int) {
 	t.StopTimer()
@@ -127,26 +168,21 @@ func benchSet(t *testing.B, size int) {
 	b.Close()
 }
 
-
 func BenchmarkGet100B(t *testing.B) {
 	benchGet(t, 100)
 }
-
 
 func BenchmarkGet1K(t *testing.B) {
 	benchGet(t, K)
 }
 
-
 func BenchmarkGet1M(t *testing.B) {
 	benchGet(t, M)
 }
 
-
 func BenchmarkGet10M(t *testing.B) {
-	benchGet(t, 10 * M)
+	benchGet(t, 10*M)
 }
-
 
 func benchGet(t *testing.B, size int) {
 	t.StopTimer()
@@ -171,7 +207,7 @@ func benchGet(t *testing.B, size int) {
 	b.Close()
 }
 
-
+/*
 func TestCompress(t *testing.T) {
 	var value []byte
 	value = genValue(K)
@@ -184,7 +220,7 @@ func TestCompress(t *testing.T) {
 		t.Errorf("uncompress failed.")
 	}
 }
-
+*/
 
 func BenchmarkCompress(b *testing.B) {
 	b.StartTimer()
@@ -194,4 +230,3 @@ func BenchmarkCompress(b *testing.B) {
 		compress(value)
 	}
 }
-
