@@ -17,12 +17,11 @@ const (
 var options Options = Options{
 	//MaxFileSize: int32(G),
 	MaxFileSize: 70,
-	StartTime: 0,
-	EndTime: 23,
-	MergeTrigger: 0.6,
+	MergeTime : 16,
 	Path:         testDirPath,
 	IsCompress:   false,
 }
+
 
 func TestNewBitcask(t *testing.T) {
 	b, err := NewBitcask(options)
@@ -35,6 +34,7 @@ func TestNewBitcask(t *testing.T) {
 		t.Errorf("Error %s while closing bitcask.", err.Error())
 	}
 }
+
 
 type TestKeyValue struct {
 	key   string
@@ -54,7 +54,7 @@ var Testdata = []TestKeyValue{
 	TestKeyValue{"key10", []byte("value10")},
 }
 
-/*
+
 func TestBcOpe(t *testing.T) {
 	b, _ := NewBitcask(options)
 	defer os.RemoveAll(b.Path)
@@ -98,12 +98,11 @@ func TestBcOpe(t *testing.T) {
 		fmt.Printf("key = %s, fid = %d, timeStamp = %d, valueSize = %d, valuePos = %d.\n", k, v.fid, v.timeStamp, v.valueSize, v.valuePos)
 	}
 }
-*/
-
 
 func TestMerge(t *testing.T) {
 	fmt.Println("in TestMerge.")
 	b, _ := NewBitcask(options)
+	defer os.RemoveAll(b.Path)
 	for _, kv := range Testdata {
 		err := b.Set(kv.key, kv.value)
 		if err != nil {
@@ -115,17 +114,6 @@ func TestMerge(t *testing.T) {
 		b.Del(Testdata[i].key)
 	}
 
-	fmt.Printf("totalKeys = %d, deadKeys = %d.\n", b.totalKeys, b.deadKeys)
-
-	//time.Sleep(30 * time.Second)
-
-	/*
-	for i := 0; i < K; i++ {
-		b.Set(string(i), []byte(i))
-	}
-	*/
-
-	time.Sleep(2 * time.Minute)
 
 	keys := b.Keys()
 	for key := range keys {
@@ -133,7 +121,15 @@ func TestMerge(t *testing.T) {
 		fmt.Printf("key = %s, value = %s.\n", key, string(value))
 	}
 
-	fmt.Printf("totalKeys = %d, deadKeys = %d.\n", b.totalKeys, b.deadKeys)
+	time.Sleep(2 * time.Minute)
+
+	keys = b.Keys()
+	for key := range keys {
+		fmt.Printf("key = %s, valuePos = %d, fid = %d.\n", key, b.kd.kv[key].valuePos, b.kd.kv[key].fid)
+		value, _ := b.Get(key)
+		fmt.Printf("key = %s, value = %s.\n", key, string(value))
+	}
+
 	b.Close()
 }
 
@@ -207,7 +203,6 @@ func benchGet(t *testing.B, size int) {
 	b.Close()
 }
 
-/*
 func TestCompress(t *testing.T) {
 	var value []byte
 	value = genValue(K)
@@ -220,7 +215,6 @@ func TestCompress(t *testing.T) {
 		t.Errorf("uncompress failed.")
 	}
 }
-*/
 
 func BenchmarkCompress(b *testing.B) {
 	b.StartTimer()

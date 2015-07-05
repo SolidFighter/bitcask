@@ -21,25 +21,16 @@ const (
 	DATA_FILE       string      = "%09d.data"
 )
 
-type Stats struct {
-	totalKeys int64
-	deadKeys  int64
-	isMerging bool
-}
-
-
 type Options struct {
 	MaxFileSize  int32
-	StartTime int
-	EndTime int
-	MergeTrigger float32
+	MergeTime int
 	Path         string
 	IsCompress   bool
 }
 
 
 type Bitcask struct {
-	Stats
+	isMerging bool
 	Options
 	sync.Mutex
 	file *File
@@ -146,29 +137,22 @@ func (b *Bitcask) fillKeyDir(fn string) error {
 			b.Lock()
 			if item, ok := b.kd.get(key); ok {
 				if record.tstamp == item.timeStamp {
-					b.totalKeys-- //set increment the totalKeys
 					err = b.set(key, record.value, record.tstamp)
 					if err != nil {
 						return fmt.Errorf("Failed to set", err.Error())
 					}
+					if err = b.Sync(); err != nil {
+						return fmt.Errorf("Failed to sync", err.Error())
+					}
 				}
-			} else {
-				b.totalKeys--
-				b.deadKeys--
-				fmt.Printf("totalKeys = %d, deadKeys = %d.\n", b.totalKeys, b.deadKeys)
 			}
 			b.Unlock()
 		} else {
 			// deleted key
 			if record.vsz == 1 && record.value[0] == 0 {
 				b.kd.delete(string(record.key))
-				b.deadKeys++
 			} else {
-				b.totalKeys++
 				b.kd.add(key, fid, record.vsz, offset - record.vsz, record.tstamp)
-				if b.Has(key) {
-					b.deadKeys++
-				}
 			}
 		}
 	}
@@ -233,11 +217,6 @@ func (b *Bitcask) set(key string, value []byte, tstamp int64) error {
 		return err
 	}
 
-	if b.Has(key) {
-		b.deadKeys++
-	} else {
-		b.totalKeys++
-	}
 	b.kd.add(key, b.file.id, int32(len(value)), vpos, tstamp)
 
 	return nil
@@ -325,14 +304,11 @@ func uncompress(value []byte) ([]byte, error) {
 
 func (b *Bitcask) merge() {
 	for {
-		if float32(b.deadKeys)/float32(b.totalKeys) > b.MergeTrigger {
-			h := time.Now().Hour()
-			if b.StartTime <= h && h <= b.EndTime {
-				b.doMerge()
-			}
+		time.Sleep(time.Hour)
+		h := time.Now().Hour()
+		if h == b.MergeTime {
+			b.doMerge()
 		}
-		//time.Sleep(time.Hour)
-		time.Sleep(10 * time.Second)
 	}
 }
 
@@ -343,25 +319,26 @@ func (b *Bitcask) doMerge() {
 	fns, err := getFileNames(b.Path)
 	b.Unlock()
 	if err != nil {
+		fmt.Println("getFileNames failed.")
 		time.Sleep(time.Minute)
 		b.doMerge()
 		return
 	}
+
+	fmt.Println("Get file names.")
 	fns = fns[:len(fns)-1]
 
 	b.isMerging = true
 	for _, fn := range fns {
+		fmt.Printf("fileName = %s.\n", fn)
 		if err := b.fillKeyDir(fn); err != nil {
 			b.isMerging = false
-			if err != nil {
-				time.Sleep(time.Minute)
-				b.doMerge()
-				return
-			}
+			fmt.Println("fillKeyDir failed.")
+			time.Sleep(time.Minute)
+			b.doMerge()
+			return
 		}
-		//time.Sleep(10 * time.Second)
 	}
-	//time.Sleep(time.Minute)
 
 	fmt.Println("Remove file.")
 	for _, fn := range fns {
